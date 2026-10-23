@@ -44,23 +44,20 @@ function getDeviceName(userAgentString) {
 
 // 3. Hàm cập nhật IP và tính toán tổng số người đang Online thực tế
 function updateAndGetOnlineCount(req) {
-  // Lấy IP của thiết bị (hỗ trợ đọc qua proxy của Render)
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const now = Date.now();
   
-  // Lưu hoặc cập nhật mốc thời gian hoạt động mới nhất của IP này
   if (ip) {
     onlineUsers[ip] = now;
   }
 
-  // Quét danh sách, loại bỏ các IP đã quá 100 giây không tương tác (90s refresh + 10s bù hao trừ lag)
+  // Quét danh sách, loại bỏ các IP đã quá 100 giây không tương tác
   for (const userIP in onlineUsers) {
     if (now - onlineUsers[userIP] > 100000) { 
       delete onlineUsers[userIP];
     }
   }
 
-  // Trả về tổng số lượng IP còn hoạt động
   return Object.keys(onlineUsers).length;
 }
 
@@ -74,11 +71,11 @@ let messages = [
   },
 ];
 
-// 5. TRANG 1: XEM TIN NHẮN (Hiển thị số người online - Tự động tải lại sau 90 giây)
+// 5. TRANG XEM TIN NHẮN (Tự động tải lại sau 90 giây)
 app.get("/", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   
-  // Gọi hàm đếm số người Online
+  // Gọi hàm cập nhật và đếm số người Online hiện tại
   const onlineCount = updateAndGetOnlineCount(req);
 
   let msgHTML = "";
@@ -108,12 +105,10 @@ app.get("/", (req, res) => {
     </head>
     <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
         
-        <h3 style="text-align:center; color:#0055a5; margin:5px 0 2px 0;">HTTP Chat Box</h3>
-        
-        <!-- Bộ đếm số người đang xem trực tuyến hiển thị nổi bật ngay trên khung chat -->
-        <div style="text-align:center; font-size:12px; color:#27ae60; font-weight:bold; margin-bottom:10px;">
-            🟢 Có ${onlineCount} người đang xem phòng chat này
-        </div>
+        <!-- [ĐÃ THAY THẾ TIÊU ĐỀ]: Hiển thị số người online ngay trên đầu trang -->
+        <h3 style="text-align:center; color:#27ae60; margin:10px 0 15px 0; font-size: 16px;">
+            🟢 Có ${onlineCount} người đang xem phòng chat
+        </h3>
         
         <!-- Khung hiển thị danh sách tin nhắn -->
         <div style="background:#fff; border:1px solid #ccc; padding:10px; min-height:200px;">
@@ -135,9 +130,8 @@ app.get("/", (req, res) => {
   res.send(html);
 });
 
-// 6. TRANG 2: KHU VỰC NHẬP LIỆU (Cập nhật hoạt động, KHÔNG tự động tải lại)
+// 6. TRANG SOẠN THẢO (KHÔNG tự động tải lại)
 app.get("/write", (req, res) => {
-  // Cập nhật mốc thời gian để khi đang gõ, bộ đếm vẫn tính người này đang online
   updateAndGetOnlineCount(req);
 
   const html = `
@@ -192,7 +186,7 @@ app.post("/send", (req, res) => {
     });
     if (messages.length > 25) messages.shift();
   }
-  updateAndGetOnlineCount(req); // Cập nhật hoạt động
+  updateAndGetOnlineCount(req);
   res.redirect("/#last-msg");
 });
 
@@ -221,7 +215,7 @@ app.post("/send-file", (req, res) => {
         if (messages.length > 25) messages.shift();
       }
     }
-    updateAndGetOnlineCount(req); // Cập nhật hoạt động
+    updateAndGetOnlineCount(req);
     res.redirect("/#last-msg");
   });
 });
