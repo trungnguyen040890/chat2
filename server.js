@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 8080;
 // Cấu hình đọc dữ liệu Form POST chuẩn HTTP
 app.use(express.urlencoded({ extended: true }));
 
-// Cấu hình Express xử lý dữ liệu tải tệp tin (Multipart Form) dung lượng dưới 5MB để tránh tràn RAM
+// Cấu hình Express xử lý dữ liệu tải tệp tin dung lượng dưới 5MB để tránh tràn RAM
 app.use(express.json({ limit: "5mb" }));
 
 // 1. Hàm lấy thời gian hiện tại (Giờ:Phút) theo múi giờ Việt Nam (GMT+7)
@@ -24,12 +24,12 @@ function getDeviceName(userAgentString) {
 
   if (ua.includes("blackberry")) {
     const bbMatch = userAgentString.match(/BlackBerry\s?(\d{4})/i);
-    return bbMatch ? `BlackBerry ${bbMatch[1]}` : "BlackBerry";
+    return bbMatch ? `BlackBerry ${bbMatch}` : "BlackBerry";
   }
   if (ua.includes("android")) {
     const androidMatch = userAgentString.match(/android\s?\d+[^;]*;\s?([^;)]+)\s?build/i);
     if (androidMatch) {
-      let model = androidMatch[1].trim();
+      let model = androidMatch.trim();
       const modelMap = {
         "21061119dg": "Redmi 10",
         "m2101k7ag": "Redmi Note 10",
@@ -57,7 +57,7 @@ function getDeviceName(userAgentString) {
 let messages = [
   {
     device: "Hệ thống",
-    text: "Phòng chat HTTP 15s đã sẵn sàng hoạt động!",
+    text: "Phòng chat HTTP 90s đã sẵn sàng hoạt động!",
     time: getTimeString(),
     isImage: false
   },
@@ -65,13 +65,17 @@ let messages = [
 
 // 4. GIAO DIỆN CHAT (HTTP GET)
 app.get("/", (req, res) => {
+  // Ép trình duyệt KHÔNG ĐƯỢC lưu bộ nhớ đệm (Cache) để luôn tải tin mới nhất khi tải lại
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
   let msgHTML = "";
 
   messages.forEach((m, index) => {
     const isLast = index === messages.length - 1 ? 'id="last-msg"' : '';
     let contentHTML = m.text;
     
-    // Nếu là tin nhắn ảnh, bọc trong thẻ <a> để người dùng nhấn vào là tải về được luôn
     if (m.isImage) {
       contentHTML = `<br><a href="${m.text}" download="chat_image_${m.time}.png" title="Nhấn để tải ảnh về">
         <img src="${m.text}" alt="Hình ảnh" style="max-width:100%; height:auto; margin-top:5px; border:1px solid #ddd; padding:2px; background:#fff;" />
@@ -89,8 +93,11 @@ app.get("/", (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="refresh" content="15;url=/#control-box">
-        <title>HTTP Chat 15s</title>
+        
+        <!-- THỜI GIAN TỰ ĐỘNG TẢI LẠI: Đã chuyển thành đúng 90 giây theo yêu cầu -->
+        <meta http-equiv="refresh" content="90;url=/#control-box">
+        
+        <title>HTTP Chat 90s</title>
     </head>
     <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
         
@@ -118,7 +125,7 @@ app.get("/", (req, res) => {
                 </table>
             </form>
 
-            <!-- 2. KHU VỰC CHỌN VÀ GỬI ẢNH RIÊNG BIỆT (Chuẩn Multipart tương thích máy cổ) -->
+            <!-- 2. KHU VỰC CHỌN VÀ GỬI ẢNH RIÊNG BIỆT -->
             <form action="/send-file" method="POST" enctype="multipart/form-data" style="margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
@@ -141,7 +148,7 @@ app.get("/", (req, res) => {
         </div>
         
         <div style="font-size:11px; color:#888; text-align:center; margin-top:10px; padding-bottom:20px;">
-            Trang web tự động cập nhật tin mới sau mỗi 15 giây...
+            Trang web tự động cập nhật tin mới sau mỗi 90 giây...
         </div>
         
     </body>
@@ -151,7 +158,7 @@ app.get("/", (req, res) => {
   res.send(html);
 });
 
-// 5. XỬ LÝ GỬI TIN NHẮN VĂN BẢN (HTTP POST)
+// 5. XỬ LÝ GỬI TIN NHẮN VĂN BẢN (Tải lại ngay lập tức sau khi nhấn nút)
 app.post("/send", (req, res) => {
   const msgText = req.body.msg;
   if (msgText && msgText.trim() !== "") {
@@ -164,20 +171,18 @@ app.post("/send", (req, res) => {
     });
     if (messages.length > 25) messages.shift();
   }
+  // Lệnh chuyển hướng này kích hoạt trình duyệt tải lại giao diện ngay lập tức 0.1 giây sau khi gửi
   res.redirect("/#control-box");
 });
 
-// 6. XỬ LÝ NHẬN VÀ CHUYỂN ĐỔI FILE ẢNH (Dùng luồng dữ liệu raw để tương thích Opera Mini)
-const multiparty = require('crypto'); // Tận dụng thư viện lõi không cần cài thêm npm ngoài express
+// 6. XỬ LÝ NHẬN VÀ CHUYỂN ĐỔI FILE ẢNH (Tải lại ngay lập tức sau khi gửi ảnh xong)
 app.post("/send-file", (req, res) => {
   let chunks = [];
-  
   req.on('data', (chunk) => { chunks.push(chunk); });
   req.on('end', () => {
     const buffer = Buffer.concat(chunks);
     const bodyStr = buffer.toString('binary');
     
-    // Tìm kiếm vị trí dữ liệu file ảnh trong chuỗi Multipart raw
     const fileStartIdx = bodyStr.indexOf('\r\n\r\n') + 4;
     const fileEndIdx = bodyStr.lastIndexOf('\r\n--');
     
@@ -185,18 +190,18 @@ app.post("/send-file", (req, res) => {
       const fileContent = bodyStr.substring(fileStartIdx, fileEndIdx);
       const base64Data = Buffer.from(fileContent, 'binary').toString('base64');
       
-      // Chỉ xử lý nếu tệp tin tải lên có dữ liệu thực tế
       if (base64Data.length > 100) {
         const userAgent = req.headers["user-agent"];
         messages.push({
           device: getDeviceName(userAgent),
-          text: `data:image/png;base64,${base64Data}`, // Lưu chuỗi Base64 trực tiếp vào mảng chữ
+          text: `data:image/png;base64,${base64Data}`,
           time: getTimeString(),
           isImage: true
         });
         if (messages.length > 25) messages.shift();
       }
     }
+    // Tải lại giao diện ngay lập tức sau khi xử lý file ảnh thành công
     res.redirect("/#control-box");
   });
 });
