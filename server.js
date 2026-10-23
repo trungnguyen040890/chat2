@@ -11,7 +11,7 @@ app.use(express.urlencoded({ extended: true }));
 let messages = [
   {
     text: "[Hệ thống]: Phòng chat HTTP 15s đã sẵn sàng hoạt động!",
-    time: "10:00",
+    time: getTimeString(),
   },
 ];
 
@@ -30,8 +30,10 @@ app.get("/", (req, res) => {
   let msgHTML = "";
 
   // Đọc danh sách tin nhắn từ RAM và chuyển thành các dòng chữ HTML
-  messages.forEach((m) => {
-    msgHTML += `<p style="margin:5px 0; font-size:14px; line-height:1.4;">[${m.time}] ${m.text}</p>`;
+  messages.forEach((m, index) => {
+    // Nếu là tin nhắn cuối cùng, thêm id="last-msg" để trình duyệt tự động cuộn xuống
+    const isLast = index === messages.length - 1 ? 'id="last-msg"' : '';
+    msgHTML += `<p ${isLast} style="margin:5px 0; font-size:14px; line-height:1.4;">[${m.time}] ${m.text}</p>`;
   });
 
   // Nội dung trang Web tối giản nhất, không dùng Javascript
@@ -42,8 +44,8 @@ app.get("/", (req, res) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         
-        <!-- THỜI GIAN CẬP NHẬT: Đã tăng lên đúng 15 giây để bạn thoải mái gõ nội dung -->
-        <meta http-equiv="refresh" content="15;url=/">
+        <!-- THỜI GIAN CẬP NHẬT: Tự động tải lại và cuộn thẳng xuống tin nhắn mới nhất -->
+        <meta http-equiv="refresh" content="15;url=/#last-msg">
         
         <title>HTTP Chat 15s</title>
     </head>
@@ -56,7 +58,7 @@ app.get("/", (req, res) => {
             ${msgHTML}
         </div>
         
-        <!-- Form gửi tin nhắn: Đã loại bỏ ô nhập Tên, chỉ giữ duy nhất ô nhập nội dung Chat -->
+        <!-- Form gửi tin nhắn: Giữ duy nhất ô nhập nội dung Chat -->
         <form action="/send" method="POST" style="background:#fff; border:1px solid #ccc; padding:10px;">
             <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
@@ -95,10 +97,11 @@ app.post("/send", (req, res) => {
     if (messages.length > 25) messages.shift();
   }
 
-  // Sau khi lưu xong, ép trình duyệt quay về trang chủ ngay lập tức để hiện tin mới
-  res.redirect("/");
+  // Sau khi lưu xong, ép trình duyệt quay về trang chủ kèm thẻ neo để cuộn xuống tin mới nhất
+  res.redirect("/#last-msg");
 });
 
 app.listen(PORT, () => {
   console.log(`Server đang chạy tại cổng: ${PORT}`);
 });
+
