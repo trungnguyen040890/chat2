@@ -28,6 +28,7 @@ app.get("/", (req, res) => {
   let msgHTML = "";
 
   messages.forEach((m, index) => {
+    // Nếu là tin nhắn cuối cùng, đặt id="last-msg" để màn hình tự cuộn xuống đáy
     const isLast = index === messages.length - 1 ? 'id="last-msg"' : '';
     msgHTML += `<p ${isLast} style="margin:8px 0; font-size:14px; line-height:1.4; border-bottom:1px dashed #eee; padding-bottom:5px;">[${m.time}] ${m.text}</p>`;
   });
@@ -38,15 +39,23 @@ app.get("/", (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="refresh" content="15;url=/#last-msg">
+        
+        <!-- Tự động làm mới và nhảy xuống thẻ neo #last-msg hoặc #control-box ở đáy trang -->
+        <meta http-equiv="refresh" content="15;url=/#control-box">
+        
         <title>HTTP Chat 15s</title>
     </head>
     <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
         
         <h3 style="text-align:center; color:#0055a5; margin:5px 0 10px 0;">HTTP Chat Box</h3>
         
-        <!-- Khu vực Form điều khiển -->
-        <div style="background:#fff; border:1px solid #ccc; padding:8px; margin-bottom:10px;">
+        <!-- [NẰM TRÊN] Danh sách hiển thị tin nhắn -->
+        <div style="background:#fff; border:1px solid #ccc; padding:10px; min-height:150px;">
+            ${msgHTML || '<p style="color:#888; text-align:center; font-style:italic;">Chưa có tin nhắn nào...</p>'}
+        </div>
+        
+        <!-- [NẰM DƯỚI] Khu vực điều khiển, nhập liệu và xóa tin nhắn -->
+        <div id="control-box" style="background:#fff; border:1px solid #ccc; padding:8px; margin-top:10px;">
             <!-- 1. Form gửi tin nhắn -->
             <form action="/send" method="POST" style="margin-bottom: 8px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
@@ -61,17 +70,12 @@ app.get("/", (req, res) => {
                 </table>
             </form>
 
-            <!-- 2. Form xóa tin nhắn (Sử dụng nút bấm chuẩn HTTP cho máy cổ) -->
+            <!-- 2. Form xóa tin nhắn -->
             <form action="/clear" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa hết tin nhắn không?');" style="margin:0;">
                 <button type="submit" style="width:100%; padding:5px; font-size:12px; background:#cc0000; color:#fff; border:1px solid #aa0000; font-weight:bold; cursor:pointer;">
                     ❌ XÓA TOÀN BỘ TIN NHẮN
                 </button>
             </form>
-        </div>
-        
-        <!-- Danh sách chat -->
-        <div style="background:#fff; border:1px solid #ccc; padding:10px; min-height:150px;">
-            ${msgHTML || '<p style="color:#888; text-align:center; font-style:italic;">Chưa có tin nhắn nào...</p>'}
         </div>
         
         <div style="font-size:11px; color:#888; text-align:center; margin-top:10px; padding-bottom:20px;">
@@ -98,15 +102,13 @@ app.post("/send", (req, res) => {
     if (messages.length > 25) messages.shift();
   }
 
-  res.redirect("/#last-msg");
+  // Chuyển hướng và tập trung màn hình vào khu vực điều khiển ở đáy
+  res.redirect("/#control-box");
 });
 
 // 5. XỬ LÝ XÓA TOÀN BỘ TIN NHẮN (HTTP POST)
 app.post("/clear", (req, res) => {
-  // Gán mảng messages thành một mảng rỗng để xóa sạch RAM
   messages = [];
-  
-  // Quay về trang chủ
   res.redirect("/");
 });
 
