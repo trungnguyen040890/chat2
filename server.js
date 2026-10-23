@@ -10,26 +10,18 @@ function getTimeString() {
   return now.toLocaleString('vi-VN', options).substring(0, 5);
 }
 
-// Hàm phân tích thông minh tách dòng máy, đời máy chi tiết
 function getDeviceName(userAgentString) {
   if (!userAgentString) return "Thiết bị ẩn danh";
-  
   const ua = userAgentString.toLowerCase();
 
-  // 1. NHẬN DIỆN BLACKBERRY (Lấy trực tiếp số đời máy trong chuỗi)
   if (ua.includes("blackberry")) {
     const bbMatch = userAgentString.match(/BlackBerry\s?(\d{4})/i);
-    return bbMatch ? `BlackBerry ${bbMatch[1]}` : "BlackBerry";
+    return bbMatch ? `BlackBerry ${bbMatch}` : "BlackBerry";
   }
-
-  // 2. NHẬN DIỆN CÁC DÒNG ANDROID (Xiaomi, Redmi, Samsung, Oppo...)
   if (ua.includes("android")) {
-    // Trích xuất mã máy nằm sau chữ "Android...; " và trước chữ "Build"
     const androidMatch = userAgentString.match(/android\s?\d+[^;]*;\s?([^;)]+)\s?build/i);
     if (androidMatch) {
-      let model = androidMatch[1].trim();
-      
-      // Dịch các mã máy phổ biến của Redmi/Xiaomi/Samsung sang tên thương mại
+      let model = androidMatch.trim();
       const modelMap = {
         "21061119dg": "Redmi 10",
         "m2101k7ag": "Redmi Note 10",
@@ -38,46 +30,20 @@ function getDeviceName(userAgentString) {
         "sm-g998b": "Samsung S21 Ultra",
         "sm-a525f": "Samsung A52"
       };
-      
-      if (modelMap[model.toLowerCase()]) {
-        return modelMap[model.toLowerCase()];
-      }
-      
-      // Nếu là tên chữ viết liền, viết hoa chữ cái đầu cho đẹp
+      if (modelMap[model.toLowerCase()]) return modelMap[model.toLowerCase()];
       return model.charAt(0).toUpperCase() + model.slice(1);
     }
     return "Thiết bị Android";
   }
-
-  // 3. NHẬN DIỆN IPHONE / IPAD (Apple giấu mã máy rất kỹ, cần map mã phần cứng)
   if (ua.includes("iphone") || ua.includes("ipad")) {
-    // Nếu là trình duyệt thông thường trên iOS, UA chỉ ghi "iPhone" hoặc "iPad"
-    // Ta bóc tách phiên bản iOS để đoán thế hệ nếu không có mã phần cứng sâu
     if (ua.includes("iphone")) {
-      // Bản đồ ánh xạ một số chuỗi định danh đặc biệt từ các ứng dụng/trình duyệt sâu hoặc Opera Mini trên iOS
       if (ua.includes("iphone11,8")) return "iPhone XR";
-      if (ua.includes("iphone10,1") || ua.includes("iphone10,4")) return "iPhone 8";
       if (ua.includes("iphone12,1")) return "iPhone 11";
-      if (ua.includes("iphone13,2")) return "iPhone 12";
-      if (ua.includes("iphone14,5")) return "iPhone 13";
-      
       return "iPhone";
     }
-    if (ua.includes("ipad")) {
-      if (ua.includes("ipad7,11") || ua.includes("ipad7,12")) return "iPad 2019";
-      return "iPad";
-    }
+    if (ua.includes("ipad")) return "iPad";
   }
-
-  // 4. CÁC THIẾT BỊ CỔ KHÁC (Nokia, Windows Phone...)
-  if (ua.includes("nokia")) {
-    const nokiaMatch = userAgentString.match(/Nokia([^;/\s)]+)/i);
-    return nokiaMatch ? `Nokia ${nokiaMatch[1]}` : "Nokia";
-  }
-  
   if (ua.includes("windows nt")) return "Máy tính PC";
-  if (ua.includes("macintosh")) return "Máy tính Mac";
-
   return "Thiết bị lạ";
 }
 
@@ -85,7 +51,8 @@ let messages = [
   {
     device: "Hệ thống",
     text: "Phòng chat HTTP 15s đã sẵn sàng hoạt động!",
-    time: getTimeString(), 
+    time: getTimeString(),
+    isImage: false
   },
 ];
 
@@ -93,8 +60,22 @@ app.get("/", (req, res) => {
   let msgHTML = "";
   messages.forEach((m, index) => {
     const isLast = index === messages.length - 1 ? 'id="last-msg"' : '';
+    
+    let contentHTML = m.text;
+    
+    // Nếu là ảnh, bọc thêm thẻ <a> kèm thuộc tính download để hỗ trợ tải về
+    if (m.isImage) {
+      contentHTML = `
+        <br>
+        <a href="${m.text}" target="_blank" download="image_${m.time}.jpg" style="text-decoration:none; display:inline-block;">
+          <img src="${m.text}" alt="Hình ảnh" style="max-width:100%; height:auto; margin-top:5px; border:1px solid #ddd; padding:2px; background:#fff;" />
+          <br>
+          <span style="font-size:11px; color:#0055a5; display:block; margin-top:2px;">📥 Bấm vào đây để tải ảnh về</span>
+        </a>`;
+    }
+
     msgHTML += `<p ${isLast} style="margin:8px 0; font-size:14px; line-height:1.4; border-bottom:1px dashed #eee; padding-bottom:5px;">
-      [${m.time}] <span style="color:#e67e22; font-weight:bold;">&lt;${m.device}&gt;</span>: ${m.text}
+      [${m.time}] <span style="color:#e67e22; font-weight:bold;">&lt;${m.device}&gt;</span>: ${contentHTML}
     </p>`;
   });
 
@@ -109,15 +90,17 @@ app.get("/", (req, res) => {
     </head>
     <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
         <h3 style="text-align:center; color:#0055a5; margin:5px 0 10px 0;">HTTP Chat Box</h3>
+        
         <div style="background:#fff; border:1px solid #ccc; padding:10px; min-height:150px;">
             ${msgHTML || '<p style="color:#888; text-align:center; font-style:italic;">Chưa có tin nhắn nào...</p>'}
         </div>
+        
         <div id="control-box" style="background:#fff; border:1px solid #ccc; padding:8px; margin-top:10px;">
             <form action="/send" method="POST" style="margin-bottom: 8px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                         <td>
-                            <input type="text" name="msg" placeholder="Nhập nội dung chat tại đây..." style="width:95%; padding:6px; font-size:13px;" autofocus required>
+                            <input type="text" name="msg" placeholder="Dán link ảnh (.jpg, .png...) hoặc nhập chữ..." style="width:95%; padding:6px; font-size:13px;" autofocus required>
                         </td>
                         <td width="20%">
                             <button type="submit" style="padding:6px 10px; font-weight:bold; width:100%; background:#0055a5; color:#fff; border:1px solid #004488;">Gửi</button>
@@ -146,10 +129,14 @@ app.post("/send", (req, res) => {
     const userAgent = req.headers["user-agent"];
     const deviceName = getDeviceName(userAgent);
 
+    const cleanText = msgText.trim();
+    const isImg = cleanText.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) != null || cleanText.startsWith("data:image/");
+
     messages.push({
       device: deviceName,
-      text: msgText,
+      text: cleanText,
       time: getTimeString(),
+      isImage: isImg
     });
     if (messages.length > 25) messages.shift();
   }
@@ -164,3 +151,5 @@ app.post("/clear", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server đang chạy tại cổng: ${PORT}`);
 });
+
+  
