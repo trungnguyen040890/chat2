@@ -28,8 +28,9 @@ app.get("/", (req, res) => {
   let msgHTML = "";
 
   messages.forEach((m, index) => {
+    // Nếu là tin nhắn cuối cùng, đặt id="last-msg"
     const isLast = index === messages.length - 1 ? 'id="last-msg"' : '';
-    msgHTML += `<p ${isLast} style="margin:5px 0; font-size:14px; line-height:1.4;">[${m.time}] ${m.text}</p>`;
+    msgHTML += `<p ${isLast} style="margin:8px 0; font-size:14px; line-height:1.4; border-bottom:1px dashed #eee; padding-bottom:5px;">[${m.time}] ${m.text}</p>`;
   });
 
   const html = `
@@ -38,29 +39,39 @@ app.get("/", (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <!-- Làm mới và nhảy thẳng xuống phần tử id="last-msg" ở đáy trang -->
         <meta http-equiv="refresh" content="15;url=/#last-msg">
+        
         <title>HTTP Chat 15s</title>
     </head>
-    <body style="font-family:sans-serif; max-width:500px; margin:10px auto; padding:10px; background:#fafafa;">
-        <h3 style="text-align:center; color:#0055a5; margin-top:0; margin-bottom:10px;">HTTP Chat Box</h3>
-        <div style="border:1px solid #ccc; background:#fff; height:280px; overflow-y:scroll; padding:10px; margin-bottom:10px;">
-            ${msgHTML}
-        </div>
-        <form action="/send" method="POST" style="background:#fff; border:1px solid #ccc; padding:10px;">
+    <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
+        
+        <h3 style="text-align:center; color:#0055a5; margin:5px 0 10px 0;">HTTP Chat Box</h3>
+        
+        <!-- Form gửi tin nhắn đặt ở TRÊN để màn hình ngắn không bị che khuất khi gõ -->
+        <form action="/send" method="POST" style="background:#fff; border:1px solid #ccc; padding:8px; margin-bottom:10px;">
             <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                     <td>
-                        <input type="text" name="msg" placeholder="Nhập tên và nội dung chat tại đây..." style="width:96%; padding:6px; font-size:13px;" autofocus required>
+                        <input type="text" name="msg" placeholder="Nhập tên và nội dung tại đây..." style="width:95%; padding:6px; font-size:13px;" autofocus required>
                     </td>
-                    <td width="15%">
-                        <button type="submit" style="padding:6px 12px; font-weight:bold; width:100%;">Gửi</button>
+                    <td width="20%">
+                        <button type="submit" style="padding:6px 10px; font-weight:bold; width:100%;">Gửi</button>
                     </td>
                 </tr>
             </table>
         </form>
-        <div style="font-size:11px; color:#888; text-align:center; margin-top:10px;">
+        
+        <!-- Danh sách chat: Loại bỏ hoàn toàn khung height:280px và overflow-y để tràn trang tự nhiên -->
+        <div style="background:#fff; border:1px solid #ccc; padding:10px; min-height:150px;">
+            ${msgHTML}
+        </div>
+        
+        <div style="font-size:11px; color:#888; text-align:center; margin-top:10px; padding-bottom:20px;">
             Trang web tự động cập nhật tin mới sau mỗi 15 giây...
         </div>
+        
     </body>
     </html>
     `;
@@ -81,6 +92,7 @@ app.post("/send", (req, res) => {
     if (messages.length > 25) messages.shift();
   }
 
+  // Chuyển hướng về trang chủ và ép màn hình cuộn xuống đáy
   res.redirect("/#last-msg");
 });
 
