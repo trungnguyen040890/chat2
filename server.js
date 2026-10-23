@@ -1,42 +1,86 @@
 const express = require("express");
 const app = express();
 
-// Sử dụng cổng do Render cấp phát hoặc 8080 nếu chạy ở máy cục bộ
 const PORT = process.env.PORT || 8080;
-
-// Cấu hình để đọc dữ liệu từ Form POST chuẩn HTTP
 app.use(express.urlencoded({ extended: true }));
 
-// 1. Hàm lấy thời gian hiện tại (Giờ:Phút) theo múi giờ Việt Nam (GMT+7)
 function getTimeString() {
   const now = new Date();
   const options = { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false };
   return now.toLocaleString('vi-VN', options).substring(0, 5);
 }
 
-// 2. Hàm phân tích chuỗi User-Agent để nhận diện tên thiết bị/trình duyệt
+// Hàm phân tích thông minh tách dòng máy, đời máy chi tiết
 function getDeviceName(userAgentString) {
   if (!userAgentString) return "Thiết bị ẩn danh";
   
   const ua = userAgentString.toLowerCase();
+
+  // 1. NHẬN DIỆN BLACKBERRY (Lấy trực tiếp số đời máy trong chuỗi)
+  if (ua.includes("blackberry")) {
+    const bbMatch = userAgentString.match(/BlackBerry\s?(\d{4})/i);
+    return bbMatch ? `BlackBerry ${bbMatch[1]}` : "BlackBerry";
+  }
+
+  // 2. NHẬN DIỆN CÁC DÒNG ANDROID (Xiaomi, Redmi, Samsung, Oppo...)
+  if (ua.includes("android")) {
+    // Trích xuất mã máy nằm sau chữ "Android...; " và trước chữ "Build"
+    const androidMatch = userAgentString.match(/android\s?\d+[^;]*;\s?([^;)]+)\s?build/i);
+    if (androidMatch) {
+      let model = androidMatch[1].trim();
+      
+      // Dịch các mã máy phổ biến của Redmi/Xiaomi/Samsung sang tên thương mại
+      const modelMap = {
+        "21061119dg": "Redmi 10",
+        "m2101k7ag": "Redmi Note 10",
+        "m2010j19sg": "Redmi 9T",
+        "sm-g973f": "Samsung S10",
+        "sm-g998b": "Samsung S21 Ultra",
+        "sm-a525f": "Samsung A52"
+      };
+      
+      if (modelMap[model.toLowerCase()]) {
+        return modelMap[model.toLowerCase()];
+      }
+      
+      // Nếu là tên chữ viết liền, viết hoa chữ cái đầu cho đẹp
+      return model.charAt(0).toUpperCase() + model.slice(1);
+    }
+    return "Thiết bị Android";
+  }
+
+  // 3. NHẬN DIỆN IPHONE / IPAD (Apple giấu mã máy rất kỹ, cần map mã phần cứng)
+  if (ua.includes("iphone") || ua.includes("ipad")) {
+    // Nếu là trình duyệt thông thường trên iOS, UA chỉ ghi "iPhone" hoặc "iPad"
+    // Ta bóc tách phiên bản iOS để đoán thế hệ nếu không có mã phần cứng sâu
+    if (ua.includes("iphone")) {
+      // Bản đồ ánh xạ một số chuỗi định danh đặc biệt từ các ứng dụng/trình duyệt sâu hoặc Opera Mini trên iOS
+      if (ua.includes("iphone11,8")) return "iPhone XR";
+      if (ua.includes("iphone10,1") || ua.includes("iphone10,4")) return "iPhone 8";
+      if (ua.includes("iphone12,1")) return "iPhone 11";
+      if (ua.includes("iphone13,2")) return "iPhone 12";
+      if (ua.includes("iphone14,5")) return "iPhone 13";
+      
+      return "iPhone";
+    }
+    if (ua.includes("ipad")) {
+      if (ua.includes("ipad7,11") || ua.includes("ipad7,12")) return "iPad 2019";
+      return "iPad";
+    }
+  }
+
+  // 4. CÁC THIẾT BỊ CỔ KHÁC (Nokia, Windows Phone...)
+  if (ua.includes("nokia")) {
+    const nokiaMatch = userAgentString.match(/Nokia([^;/\s)]+)/i);
+    return nokiaMatch ? `Nokia ${nokiaMatch[1]}` : "Nokia";
+  }
   
-  // Nhận diện các trình duyệt và hệ điều hành phổ biến (Đặc biệt là máy cổ)
-  if (ua.includes("opera mini")) return "Opera Mini";
-  if (ua.includes("opera mabi") || ua.includes("opera mobi")) return "Opera Mobile";
-  if (ua.includes("blackberry") || ua.includes("bb10")) return "BlackBerry";
-  if (ua.includes("nokia") || ua.includes("symbian") || ua.includes("series60")) return "Nokia Symbian";
-  if (ua.includes("iemobile") || ua.includes("windows phone")) return "Windows Phone";
-  if (ua.includes("iphone")) return "iPhone";
-  if (ua.includes("ipad")) return "iPad";
-  if (ua.includes("android")) return "Android";
-  if (ua.includes("windows")) return "Máy tính Windows";
-  if (ua.includes("macintosh") || ua.includes("mac os")) return "Máy tính Mac";
-  if (ua.includes("linux")) return "Máy tính Linux";
-  
+  if (ua.includes("windows nt")) return "Máy tính PC";
+  if (ua.includes("macintosh")) return "Máy tính Mac";
+
   return "Thiết bị lạ";
 }
 
-// 3. Mảng lưu trữ tin nhắn động trên RAM (Bổ sung thêm trường device)
 let messages = [
   {
     device: "Hệ thống",
@@ -45,14 +89,10 @@ let messages = [
   },
 ];
 
-// 4. GIAO DIỆN CHAT (HTTP GET)
 app.get("/", (req, res) => {
   let msgHTML = "";
-
   messages.forEach((m, index) => {
     const isLast = index === messages.length - 1 ? 'id="last-msg"' : '';
-    
-    // Hiển thị tên thiết bị trong ngoặc nhọn <...> và tô màu cam nổi bật
     msgHTML += `<p ${isLast} style="margin:8px 0; font-size:14px; line-height:1.4; border-bottom:1px dashed #eee; padding-bottom:5px;">
       [${m.time}] <span style="color:#e67e22; font-weight:bold;">&lt;${m.device}&gt;</span>: ${m.text}
     </p>`;
@@ -68,17 +108,11 @@ app.get("/", (req, res) => {
         <title>HTTP Chat 15s</title>
     </head>
     <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
-        
         <h3 style="text-align:center; color:#0055a5; margin:5px 0 10px 0;">HTTP Chat Box</h3>
-        
-        <!-- [NẰM TRÊN] Danh sách hiển thị tin nhắn -->
         <div style="background:#fff; border:1px solid #ccc; padding:10px; min-height:150px;">
             ${msgHTML || '<p style="color:#888; text-align:center; font-style:italic;">Chưa có tin nhắn nào...</p>'}
         </div>
-        
-        <!-- [NẰM DƯỚI] Khu vực điều khiển -->
         <div id="control-box" style="background:#fff; border:1px solid #ccc; padding:8px; margin-top:10px;">
-            <!-- 1. Form gửi tin nhắn (Đã sửa placeholder gọn gàng hơn vì tên thiết bị tự nhận diện) -->
             <form action="/send" method="POST" style="margin-bottom: 8px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
@@ -91,50 +125,37 @@ app.get("/", (req, res) => {
                     </tr>
                 </table>
             </form>
-
-            <!-- 2. Form xóa tin nhắn -->
             <form action="/clear" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa hết tin nhắn không?');" style="margin:0;">
                 <button type="submit" style="width:100%; padding:5px; font-size:12px; background:#cc0000; color:#fff; border:1px solid #aa0000; font-weight:bold; cursor:pointer;">
                     ❌ XÓA TOÀN BỘ TIN NHẮN
                 </button>
             </form>
         </div>
-        
         <div style="font-size:11px; color:#888; text-align:center; margin-top:10px; padding-bottom:20px;">
             Trang web tự động cập nhật tin mới sau mỗi 15 giây...
         </div>
-        
     </body>
     </html>
     `;
-
   res.send(html);
 });
 
-// 5. XỬ LÝ GỬI TIN (HTTP POST)
 app.post("/send", (req, res) => {
   const msgText = req.body.msg;
-
   if (msgText && msgText.trim() !== "") {
-    // Đọc chuỗi User-Agent từ Header của yêu cầu gửi lên
     const userAgent = req.headers["user-agent"];
-    
-    // Chuyển đổi chuỗi đó thành tên thiết bị ngắn gọn
     const deviceName = getDeviceName(userAgent);
 
     messages.push({
-      device: deviceName, // Lưu tên thiết bị vào cấu trúc tin nhắn
+      device: deviceName,
       text: msgText,
       time: getTimeString(),
     });
-
     if (messages.length > 25) messages.shift();
   }
-
   res.redirect("/#control-box");
 });
 
-// 6. XỬ LÝ XÓA TOÀN BỘ TIN NHẮN (HTTP POST)
 app.post("/clear", (req, res) => {
   messages = [];
   res.redirect("/");
@@ -143,4 +164,3 @@ app.post("/clear", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server đang chạy tại cổng: ${PORT}`);
 });
-
