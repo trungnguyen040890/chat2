@@ -1,4 +1,3 @@
-
 const express = require("express");
 const app = express();
 
@@ -15,22 +14,48 @@ function getTimeString() {
   return now.toLocaleString('vi-VN', options).substring(0, 5);
 }
 
-// 2. Mảng lưu trữ tin nhắn động trực tiếp trên thanh RAM của Server
+// 2. Hàm phân tích chuỗi User-Agent để nhận diện tên thiết bị/trình duyệt
+function getDeviceName(userAgentString) {
+  if (!userAgentString) return "Thiết bị ẩn danh";
+  
+  const ua = userAgentString.toLowerCase();
+  
+  // Nhận diện các trình duyệt và hệ điều hành phổ biến (Đặc biệt là máy cổ)
+  if (ua.includes("opera mini")) return "Opera Mini";
+  if (ua.includes("opera mabi") || ua.includes("opera mobi")) return "Opera Mobile";
+  if (ua.includes("blackberry") || ua.includes("bb10")) return "BlackBerry";
+  if (ua.includes("nokia") || ua.includes("symbian") || ua.includes("series60")) return "Nokia Symbian";
+  if (ua.includes("iemobile") || ua.includes("windows phone")) return "Windows Phone";
+  if (ua.includes("iphone")) return "iPhone";
+  if (ua.includes("ipad")) return "iPad";
+  if (ua.includes("android")) return "Android";
+  if (ua.includes("windows")) return "Máy tính Windows";
+  if (ua.includes("macintosh") || ua.includes("mac os")) return "Máy tính Mac";
+  if (ua.includes("linux")) return "Máy tính Linux";
+  
+  return "Thiết bị lạ";
+}
+
+// 3. Mảng lưu trữ tin nhắn động trên RAM (Bổ sung thêm trường device)
 let messages = [
   {
-    text: "[Hệ thống]: Phòng chat HTTP 15s đã sẵn sàng hoạt động!",
+    device: "Hệ thống",
+    text: "Phòng chat HTTP 15s đã sẵn sàng hoạt động!",
     time: getTimeString(), 
   },
 ];
 
-// 3. GIAO DIỆN CHAT (HTTP GET)
+// 4. GIAO DIỆN CHAT (HTTP GET)
 app.get("/", (req, res) => {
   let msgHTML = "";
 
   messages.forEach((m, index) => {
-    // Nếu là tin nhắn cuối cùng, đặt id="last-msg" để màn hình tự cuộn xuống đáy
     const isLast = index === messages.length - 1 ? 'id="last-msg"' : '';
-    msgHTML += `<p ${isLast} style="margin:8px 0; font-size:14px; line-height:1.4; border-bottom:1px dashed #eee; padding-bottom:5px;">[${m.time}] ${m.text}</p>`;
+    
+    // Hiển thị tên thiết bị trong ngoặc nhọn <...> và tô màu cam nổi bật
+    msgHTML += `<p ${isLast} style="margin:8px 0; font-size:14px; line-height:1.4; border-bottom:1px dashed #eee; padding-bottom:5px;">
+      [${m.time}] <span style="color:#e67e22; font-weight:bold;">&lt;${m.device}&gt;</span>: ${m.text}
+    </p>`;
   });
 
   const html = `
@@ -39,10 +64,7 @@ app.get("/", (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        
-        <!-- Tự động làm mới và nhảy xuống thẻ neo #last-msg hoặc #control-box ở đáy trang -->
         <meta http-equiv="refresh" content="15;url=/#control-box">
-        
         <title>HTTP Chat 15s</title>
     </head>
     <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
@@ -54,14 +76,14 @@ app.get("/", (req, res) => {
             ${msgHTML || '<p style="color:#888; text-align:center; font-style:italic;">Chưa có tin nhắn nào...</p>'}
         </div>
         
-        <!-- [NẰM DƯỚI] Khu vực điều khiển, nhập liệu và xóa tin nhắn -->
+        <!-- [NẰM DƯỚI] Khu vực điều khiển -->
         <div id="control-box" style="background:#fff; border:1px solid #ccc; padding:8px; margin-top:10px;">
-            <!-- 1. Form gửi tin nhắn -->
+            <!-- 1. Form gửi tin nhắn (Đã sửa placeholder gọn gàng hơn vì tên thiết bị tự nhận diện) -->
             <form action="/send" method="POST" style="margin-bottom: 8px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                         <td>
-                            <input type="text" name="msg" placeholder="Nhập tên và nội dung tại đây..." style="width:95%; padding:6px; font-size:13px;" autofocus required>
+                            <input type="text" name="msg" placeholder="Nhập nội dung chat tại đây..." style="width:95%; padding:6px; font-size:13px;" autofocus required>
                         </td>
                         <td width="20%">
                             <button type="submit" style="padding:6px 10px; font-weight:bold; width:100%; background:#0055a5; color:#fff; border:1px solid #004488;">Gửi</button>
@@ -89,12 +111,19 @@ app.get("/", (req, res) => {
   res.send(html);
 });
 
-// 4. XỬ LÝ GỬI TIN (HTTP POST)
+// 5. XỬ LÝ GỬI TIN (HTTP POST)
 app.post("/send", (req, res) => {
   const msgText = req.body.msg;
 
   if (msgText && msgText.trim() !== "") {
+    // Đọc chuỗi User-Agent từ Header của yêu cầu gửi lên
+    const userAgent = req.headers["user-agent"];
+    
+    // Chuyển đổi chuỗi đó thành tên thiết bị ngắn gọn
+    const deviceName = getDeviceName(userAgent);
+
     messages.push({
+      device: deviceName, // Lưu tên thiết bị vào cấu trúc tin nhắn
       text: msgText,
       time: getTimeString(),
     });
@@ -102,11 +131,10 @@ app.post("/send", (req, res) => {
     if (messages.length > 25) messages.shift();
   }
 
-  // Chuyển hướng và tập trung màn hình vào khu vực điều khiển ở đáy
   res.redirect("/#control-box");
 });
 
-// 5. XỬ LÝ XÓA TOÀN BỘ TIN NHẮN (HTTP POST)
+// 6. XỬ LÝ XÓA TOÀN BỘ TIN NHẮN (HTTP POST)
 app.post("/clear", (req, res) => {
   messages = [];
   res.redirect("/");
@@ -115,3 +143,4 @@ app.post("/clear", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server đang chạy tại cổng: ${PORT}`);
 });
+
