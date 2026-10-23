@@ -1,0 +1,12 @@
+{
+  "name": "http-chat-bbos6",
+  "version": "1.0.0",
+  "description": "Siêu nhẹ cho Opera Mini",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
