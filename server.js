@@ -58,7 +58,7 @@ function getDeviceName(userAgentString) {
 let messages = [
   {
     device: "Hệ thống",
-    text: "Phòng chat HTTP 90s đã sẵn sàng hoạt động!",
+    text: "Phòng chat đã sẵn sàng hoạt động!",
     time: getTimeString(),
     isImage: false
   },
@@ -117,7 +117,7 @@ app.get("/", (req, res) => {
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                         <td>
-                            <input type="text" name="msg" placeholder="Nhập chữ tại đây..." style="width:95%; padding:6px; font-size:13px;" autofocus required>
+                            <input type="text" name="msg" placeholder="Soạn tin nhắn..." style="width:95%; padding:6px; font-size:13px;" autofocus required>
                         </td>
                         <td width="20%">
                             <button type="submit" style="padding:6px 10px; font-weight:bold; width:100%; background:#0055a5; color:#fff; border:1px solid #004488;">Gửi</button>
@@ -143,7 +143,7 @@ app.get("/", (req, res) => {
             <!-- 3. NÚT XÓA TOÀN BỘ PHÒNG CHAT -->
             <form action="/clear" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa hết tin nhắn không?');" style="margin:0;">
                 <button type="submit" style="width:100%; padding:5px; font-size:12px; background:#cc0000; color:#fff; border:1px solid #aa0000; font-weight:bold; cursor:pointer;">
-                    ❌ XÓA TOÀN BỘ TIN NHẮN
+                    XÓA TOÀN BỘ TIN NHẮN
                 </button>
             </form>
         </div>
