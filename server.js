@@ -102,7 +102,7 @@ app.get("/", (req, res) => {
     </head>
     <body style="font-family:sans-serif; max-width:500px; margin:0 auto; padding:10px; background:#fafafa;">
         
-        <h3 style="text-align:center; color:#0055a5; margin:5px 0 10px 0;">HTTP Chat Box</h3>
+        <h3 style="text-align:center; color:#0055a5; margin:5px 0 10px 0;">CHÚC MỘT NGÀY TỐT LÀNH</h3>
         
         <!-- [NẰM TRÊN] Khung hiển thị danh sách tin nhắn -->
         <div style="background:#fff; border:1px solid #ccc; padding:10px; min-height:150px;">
