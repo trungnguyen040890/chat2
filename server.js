@@ -1,23 +1,21 @@
 
+
 const express = require("express");
 const multer = require("multer");
+const crypto = require("crypto");
 
 const app = express();
-
-// Sử dụng cổng do Render cấp phát hoặc 8080 nếu chạy cục bộ
 const PORT = process.env.PORT || 8080;
 
-// Cấu hình đọc dữ liệu Form POST chuẩn HTTP
+// Cấu hình đọc dữ liệu form
 app.use(express.urlencoded({ extended: true }));
-
-// Giới hạn dữ liệu JSON
 app.use(express.json({ limit: "5mb" }));
 
-// Cấu hình nhận file ảnh, lưu tạm trong RAM
+// Nhận ảnh và lưu tạm trong RAM
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024 // Tối đa 5 MB
+    fileSize: 5 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype && file.mimetype.startsWith("image/")) {
@@ -28,38 +26,36 @@ const upload = multer({
   }
 });
 
-// 1. Lấy thời gian hiện tại theo múi giờ Việt Nam
+// Định dạng thời gian Việt Nam
 function getTimeString() {
   const now = new Date();
 
-  const options = {
+  return now.toLocaleString("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false
-  };
-
-  return now.toLocaleString("vi-VN", options).substring(0, 5);
+  }).substring(0, 5);
 }
 
-// 2. Nhận diện thiết bị từ User-Agent
+// Nhận diện thiết bị
 function getDeviceName(userAgentString) {
   if (!userAgentString) return "Thiết bị ẩn danh";
 
   const ua = userAgentString.toLowerCase();
 
   if (ua.includes("blackberry")) {
-    const bbMatch = userAgentString.match(/BlackBerry\s?(\d{4})/i);
-    return bbMatch ? `BlackBerry ${bbMatch[1]}` : "BlackBerry";
+    const match = userAgentString.match(/BlackBerry\s?(\d{4})/i);
+    return match ? `BlackBerry ${match[1]}` : "BlackBerry";
   }
 
   if (ua.includes("android")) {
-    const androidMatch = userAgentString.match(
-      /android\s?\d+[^;]*;\s?([^;)]+?)\s?(?:build\/[^;)]+)?\s*\)/i
+    const match = userAgentString.match(
+      /android\s?\d+[^;]*;\s?([^;)]+?)(?:\s+build\/[^;)]+)?\s*\)/i
     );
 
-    if (androidMatch) {
-      const model = androidMatch[1].trim();
+    if (match) {
+      const model = match[1].trim();
 
       const modelMap = {
         "21061119dg": "Redmi 10",
@@ -68,49 +64,26 @@ function getDeviceName(userAgentString) {
         "sm-g973f": "Samsung S10"
       };
 
-      if (modelMap[model.toLowerCase()]) {
-        return modelMap[model.toLowerCase()];
-      }
-
-      return model.charAt(0).toUpperCase() + model.slice(1);
+      return modelMap[model.toLowerCase()] ||
+        model.charAt(0).toUpperCase() + model.slice(1);
     }
 
     return "Thiết bị Android";
   }
 
-  if (ua.includes("iphone") || ua.includes("ipad")) {
+  if (ua.includes("iphone")) {
     if (ua.includes("iphone11,8")) return "iPhone XR";
     if (ua.includes("iphone12,1")) return "iPhone 11";
-    if (ua.includes("iphone")) return "iPhone";
-
-    return "iPad";
+    return "iPhone";
   }
 
+  if (ua.includes("ipad")) return "iPad";
   if (ua.includes("windows nt")) return "Máy tính PC";
 
   return "Thiết bị lạ";
 }
 
-// 3. Danh sách tin nhắn lưu trong RAM
-let messages = [
-  {
-    device: "Hệ thống",
-    text: "Phòng chat đã sẵn sàng hoạt động!",
-    time: getTimeString(),
-    isImage: false
-  }
-];
-
-// Hàm giới hạn tối đa 25 tin nhắn
-function addMessage(message) {
-  messages.push(message);
-
-  if (messages.length > 25) {
-    messages.shift();
-  }
-}
-
-// Hàm chống chèn HTML khi hiển thị tin nhắn văn bản
+// Chống chèn HTML vào tin nhắn
 function escapeHTML(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
     const entities = {
@@ -125,12 +98,93 @@ function escapeHTML(value) {
   });
 }
 
-// 4. GIAO DIỆN PHÒNG CHAT
-app.get("/", (req, res) => {
-  res.setHeader(
-    "Cache-Control",
-    "no-cache, no-store, must-revalidate"
+// Danh sách tin nhắn
+let messages = [
+  {
+    device: "Hệ thống",
+    text: "Phòng chat đã sẵn sàng hoạt động!",
+    time: getTimeString(),
+    isImage: false
+  }
+];
+
+// Chỉ lưu tối đa 25 tin nhắn
+function addMessage(message) {
+  messages.push(message);
+
+  if (messages.length > 25) {
+    messages.shift();
+  }
+}
+
+// Bảng định dạng ảnh được hỗ trợ
+const allowedTypes = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/bmp": "bmp",
+  "image/avif": "avif"
+};
+
+// Phân tích dữ liệu ảnh Base64
+function getImageBuffer(message) {
+  if (!message || !message.isImage || !message.text) {
+    return null;
+  }
+
+  const match = message.text.match(
+    /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/
   );
+
+  if (!match || !allowedTypes[match[1]]) {
+    return null;
+  }
+
+  return {
+    mimeType: match[1],
+    extension: allowedTypes[match[1]],
+    buffer: Buffer.from(match[2], "base64")
+  };
+}
+
+// 1. URL HIỂN THỊ VÀ TẢI ẢNH
+app.get("/image/:id", (req, res) => {
+  const message = messages.find(
+    (m) => m.isImage && m.id === req.params.id
+  );
+
+  if (!message) {
+    return res.status(404).send("Ảnh không tồn tại hoặc đã bị xóa.");
+  }
+
+  const image = getImageBuffer(message);
+
+  if (!image) {
+    return res.status(400).send("Dữ liệu ảnh không hợp lệ.");
+  }
+
+  res.setHeader("Content-Type", image.mimeType);
+  res.setHeader("Content-Length", image.buffer.length);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "no-store");
+
+  // Có ?download=1 thì yêu cầu tải file
+  if (req.query.download === "1") {
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="chat_image_${message.id}.${image.extension}"`
+    );
+  } else {
+    res.setHeader("Content-Disposition", "inline");
+  }
+
+  res.end(image.buffer);
+});
+
+// 2. GIAO DIỆN PHÒNG CHAT
+app.get("/", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
 
@@ -142,32 +196,22 @@ app.get("/", (req, res) => {
 
     let contentHTML = escapeHTML(m.text);
 
-    if (m.isImage) {
-      // Ảnh mở trong tab mới khi nhấn vào
-      const imageURL = escapeHTML(m.text);
+    if (m.isImage && m.id) {
+      const imageURL = `/image/${encodeURIComponent(m.id)}`;
+      const downloadURL = `${imageURL}?download=1`;
 
       contentHTML = `
         <br>
-        <a
-          href="${imageURL}"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Nhấn để mở ảnh trong tab mới"
-          style="display:inline-block;"
-        >
+        <a href="${imageURL}" target="_blank">
           <img
             src="${imageURL}"
             alt="Hình ảnh"
-            style="
-              max-width:100%;
-              height:auto;
-              margin-top:5px;
-              border:1px solid #ddd;
-              padding:2px;
-              background:#fff;
-              cursor:pointer;
-            "
+            style="max-width:100%;height:auto;margin-top:5px;border:1px solid #ddd;padding:2px;background:#fff;"
           >
+        </a>
+        <br>
+        <a href="${downloadURL}">
+          [Tải ảnh về điện thoại]
         </a>
       `;
     }
@@ -196,9 +240,7 @@ app.get("/", (req, res) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
       <meta http-equiv="refresh" content="90;url=/#control-box">
-
       <title>HTTP Chat 90s</title>
     </head>
 
@@ -209,7 +251,6 @@ app.get("/", (req, res) => {
       padding:10px;
       background:#fafafa;
     ">
-
       <h3 style="
         text-align:center;
         color:#0055a5;
@@ -218,7 +259,6 @@ app.get("/", (req, res) => {
         CHÚC MỘT NGÀY TỐT LÀNH
       </h3>
 
-      <!-- KHU VỰC HIỂN THỊ TIN NHẮN -->
       <div style="
         background:#fff;
         border:1px solid #ccc;
@@ -227,31 +267,21 @@ app.get("/", (req, res) => {
       ">
         ${
           msgHTML ||
-          '<p style="color:#888;text-align:center;font-style:italic;">Chưa có tin nhắn nào...</p>'
+          '<p style="color:#888;text-align:center;">Chưa có tin nhắn nào...</p>'
         }
       </div>
 
-      <!-- KHU VỰC CHỨC NĂNG -->
-      <div
-        id="control-box"
-        style="
-          background:#fff;
-          border:1px solid #ccc;
-          padding:8px;
-          margin-top:10px;
-        "
-      >
-
-        <!-- GỬI TIN NHẮN VĂN BẢN -->
-        <form
-          action="/send"
-          method="POST"
-          style="
-            margin-bottom:12px;
-            border-bottom:1px solid #eee;
-            padding-bottom:10px;
-          "
-        >
+      <div id="control-box" style="
+        background:#fff;
+        border:1px solid #ccc;
+        padding:8px;
+        margin-top:10px;
+      ">
+        <form action="/send" method="POST" style="
+          margin-bottom:12px;
+          border-bottom:1px solid #eee;
+          padding-bottom:10px;
+        ">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td>
@@ -263,37 +293,23 @@ app.get("/", (req, res) => {
                   required
                 >
               </td>
-
               <td width="20%">
-                <button
-                  type="submit"
-                  style="
-                    padding:6px 10px;
-                    font-weight:bold;
-                    width:100%;
-                    background:#0055a5;
-                    color:#fff;
-                    border:1px solid #004488;
-                  "
-                >
-                  Gửi
-                </button>
+                <button type="submit" style="
+                  padding:6px 10px;
+                  font-weight:bold;
+                  width:100%;
+                  background:#0055a5;
+                  color:#fff;
+                  border:1px solid #004488;
+                ">Gửi</button>
               </td>
             </tr>
           </table>
         </form>
 
-        <!-- GỬI ẢNH -->
-        <form
-          action="/send-file"
-          method="POST"
+        <form action="/send-file" method="POST"
           enctype="multipart/form-data"
-          style="
-            margin-bottom:12px;
-            border-bottom:1px solid #eee;
-            padding-bottom:10px;
-          "
-        >
+          style="margin-bottom:12px;border-bottom:1px solid #eee;padding-bottom:10px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td>
@@ -305,46 +321,33 @@ app.get("/", (req, res) => {
                   required
                 >
               </td>
-
               <td width="20%">
-                <button
-                  type="submit"
-                  style="
-                    padding:6px 10px;
-                    font-weight:bold;
-                    width:100%;
-                    background:#27ae60;
-                    color:#fff;
-                    border:1px solid #219653;
-                  "
-                >
-                  Gửi ảnh
-                </button>
+                <button type="submit" style="
+                  padding:6px 10px;
+                  font-weight:bold;
+                  width:100%;
+                  background:#27ae60;
+                  color:#fff;
+                  border:1px solid #219653;
+                ">Gửi ảnh</button>
               </td>
             </tr>
           </table>
         </form>
 
-        <!-- XÓA TOÀN BỘ TIN NHẮN -->
-        <form
-          action="/clear"
-          method="POST"
+        <form action="/clear" method="POST"
           onsubmit="return confirm('Bạn có chắc chắn muốn xóa hết tin nhắn không?');"
-          style="margin:0;"
-        >
-          <button
-            type="submit"
-            style="
-              width:100%;
-              padding:5px;
-              font-size:12px;
-              background:#cc0000;
-              color:#fff;
-              border:1px solid #aa0000;
-              font-weight:bold;
-              cursor:pointer;
-            "
-          >
+          style="margin:0;">
+          <button type="submit" style="
+            width:100%;
+            padding:5px;
+            font-size:12px;
+            background:#cc0000;
+            color:#fff;
+            border:1px solid #aa0000;
+            font-weight:bold;
+            cursor:pointer;
+          ">
             XÓA TOÀN BỘ TIN NHẮN
           </button>
         </form>
@@ -359,7 +362,6 @@ app.get("/", (req, res) => {
       ">
         Trang web tự động cập nhật tin mới sau mỗi 90 giây...
       </div>
-
     </body>
     </html>
   `;
@@ -367,7 +369,7 @@ app.get("/", (req, res) => {
   res.send(html);
 });
 
-// 5. XỬ LÝ GỬI TIN NHẮN VĂN BẢN
+// 3. GỬI TIN NHẮN VĂN BẢN
 app.post("/send", (req, res) => {
   const msgText = req.body.msg;
 
@@ -383,13 +385,14 @@ app.post("/send", (req, res) => {
   res.redirect("/#control-box");
 });
 
-// 6. XỬ LÝ GỬI ẢNH
+// 4. GỬI ẢNH
 app.post("/send-file", (req, res, next) => {
   upload.single("image")(req, res, (err) => {
     if (err) {
-      if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      if (err instanceof multer.MulterError &&
+          err.code === "LIMIT_FILE_SIZE") {
         return res.status(413).send(
-          "Ảnh vượt quá dung lượng cho phép 5 MB. Vui lòng chọn ảnh nhỏ hơn."
+          "Ảnh vượt quá 5 MB. Vui lòng chọn ảnh nhỏ hơn."
         );
       }
 
@@ -402,18 +405,10 @@ app.post("/send-file", (req, res, next) => {
       return res.status(400).send("Vui lòng chọn ảnh trước khi gửi.");
     }
 
-    // Chỉ nhận những MIME type hình ảnh thông dụng
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "image/webp",
-      "image/bmp",
-      "image/avif"
-    ];
-
-    if (!allowedTypes.includes(req.file.mimetype)) {
-      return res.status(400).send("Định dạng ảnh này chưa được hỗ trợ.");
+    if (!allowedTypes[req.file.mimetype]) {
+      return res.status(400).send(
+        "Định dạng chưa hỗ trợ. Hãy chọn JPG, PNG, GIF, WEBP, BMP hoặc AVIF."
+      );
     }
 
     const base64Data = req.file.buffer.toString("base64");
@@ -421,6 +416,7 @@ app.post("/send-file", (req, res, next) => {
       `data:${req.file.mimetype};base64,${base64Data}`;
 
     addMessage({
+      id: crypto.randomBytes(12).toString("hex"),
       device: getDeviceName(req.headers["user-agent"]),
       text: imageDataURL,
       time: getTimeString(),
@@ -431,13 +427,13 @@ app.post("/send-file", (req, res, next) => {
   });
 });
 
-// 7. XÓA TOÀN BỘ TIN NHẮN
+// 5. XÓA TIN NHẮN
 app.post("/clear", (req, res) => {
   messages = [];
   res.redirect("/");
 });
 
-// 8. XỬ LÝ LỖI KHÔNG DỰ KIẾN
+// 6. XỬ LÝ LỖI
 app.use((err, req, res, next) => {
   console.error(err);
 
@@ -448,7 +444,7 @@ app.use((err, req, res, next) => {
   res.status(500).send("Đã xảy ra lỗi trên máy chủ.");
 });
 
-// 9. KHỞI ĐỘNG SERVER
+// 7. KHỞI ĐỘNG SERVER
 app.listen(PORT, () => {
   console.log(`Server đang chạy tại cổng: ${PORT}`);
 });
