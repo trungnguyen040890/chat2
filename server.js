@@ -102,7 +102,7 @@ function escapeHTML(value) {
 let messages = [
   {
     device: "Hệ thống",
-    text: "Phòng chat đã sẵn sàng hoạt động!",
+    text: "Xin chào!",
     time: getTimeString(),
     isImage: false
   }
